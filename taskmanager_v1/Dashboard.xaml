@@ -9,7 +9,7 @@
 
         <Button Content="Refresh Tasks" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,60,20,0" Width="150" Click="RefreshTasksButton_Click"/>
 
-        <ListView Name="TasksListView" Margin="20,120,20,20">
+        <ListView Name="TasksListView" Margin="20,120,20,20" ItemsSource="{Binding}">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="ID" DisplayMemberBinding="{Binding Id}" Width="50" />
@@ -17,6 +17,13 @@
                     <GridViewColumn Header="Description" DisplayMemberBinding="{Binding Description}" Width="300" />
                     <GridViewColumn Header="Deadline" DisplayMemberBinding="{Binding Deadline}" Width="150" />
                     <GridViewColumn Header="Completed" DisplayMemberBinding="{Binding Completed}" Width="80" />
+                    <GridViewColumn Header="Actions" Width="100">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="Edit" Click="EditTaskButton_Click" Tag="{Binding}" Width="60" />
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
                 </GridView>
             </ListView.View>
         </ListView>

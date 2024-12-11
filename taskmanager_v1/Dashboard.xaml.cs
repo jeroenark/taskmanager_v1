@@ -56,6 +56,35 @@ namespace taskmanager_v1
             _ = LoadTasksAsync(); // Fire and forget
         }
 
+        private void EditTaskButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Ensure a task is selected
+            if (TasksListView.SelectedItem is TaskItem selectedTask)
+            {
+                // Open the TaskEditPopup with all required parameters
+                TaskEditPopup editPopup = new TaskEditPopup(
+                    AccessToken,
+                    selectedTask.Id,
+                    selectedTask.Title,
+                    selectedTask.Description,
+                    selectedTask.Deadline,
+                    selectedTask.Completed == "Y" // Convert "Y"/"N" to a boolean
+                );
+
+                // Set the popup's owner to the current window
+                editPopup.Owner = this;
+                editPopup.ShowDialog();
+
+                // Refresh the tasks after editing
+                _ = LoadTasksAsync();
+            }
+            else
+            {
+                MessageBox.Show("Please select a task to edit.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+
         // Fetch tasks from the API
         private async Task<List<TaskItem>> GetTasksAsync()
         {
