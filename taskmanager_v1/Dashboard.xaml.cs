@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using Newtonsoft.Json;
 
 namespace taskmanager_v1
@@ -84,6 +85,54 @@ namespace taskmanager_v1
             }
         }
 
+        // Remove Task button click handler
+        private async void RemoveTaskButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is TaskItem task)
+            {
+                MessageBoxResult result = MessageBox.Show(
+                    $"Are you sure you want to delete the task '{task.Title}'?",
+                    "Confirm Delete",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning
+                );
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        using (HttpClient client = new HttpClient())
+                        {
+                            // Set the API endpoint
+                            string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{task.Id}";
+
+                            // Add the authorization header
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                            // Send the DELETE request
+                            HttpResponseMessage response = await client.DeleteAsync(apiUrl);
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                MessageBox.Show("Task deleted successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                                // Reload tasks after deletion
+                                await LoadTasksAsync();
+                            }
+                            else
+                            {
+                                string error = await response.Content.ReadAsStringAsync();
+                                MessageBox.Show($"Error deleting task: {response.StatusCode} - {error}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"An error occurred: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
 
         // Fetch tasks from the API
         private async Task<List<TaskItem>> GetTasksAsync()
