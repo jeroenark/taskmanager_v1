@@ -7,9 +7,20 @@
 
         <Button Content="Create Task" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0" Width="150" Click="CreateTaskButton_Click"/>
 
-        <Button Content="Refresh Tasks" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,60,20,0" Width="150" Click="RefreshTasksButton_Click"/>
+        <!-- Filters -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,100,0,0">
+            <ComboBox Name="CompletionStatusComboBox" Width="200" Margin="10,0,10,0" SelectionChanged="CompletionStatusComboBox_SelectionChanged">
+                <ComboBoxItem>All Tasks</ComboBoxItem>
+                <ComboBoxItem>Completed</ComboBoxItem>
+                <ComboBoxItem>Not Completed</ComboBoxItem>
+            </ComboBox>
+            <ComboBox Name="SortDateComboBox" Width="200" Margin="10,0,10,0" SelectionChanged="SortDateComboBox_SelectionChanged">
+                <ComboBoxItem>Sort by Date (Asc)</ComboBoxItem>
+                <ComboBoxItem>Sort by Date (Desc)</ComboBoxItem>
+            </ComboBox>
+        </StackPanel>
 
-        <ListView Name="TasksListView" Margin="20,120,20,20" ItemsSource="{Binding}">
+        <ListView Name="TasksListView" Margin="20,160,20,20" ItemsSource="{Binding}">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="ID" DisplayMemberBinding="{Binding Id}" Width="50" />
@@ -17,15 +28,15 @@
                     <GridViewColumn Header="Description" DisplayMemberBinding="{Binding Description}" Width="300" />
                     <GridViewColumn Header="Deadline" DisplayMemberBinding="{Binding Deadline}" Width="150" />
                     <GridViewColumn Header="Completed" DisplayMemberBinding="{Binding Completed}" Width="80" />
-                    <GridViewColumn Header="Actions" Width="200">
+                    <GridViewColumn Header="Actions" Width="100">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
                                     <!-- Edit Button -->
                                     <Button Content="Edit" Click="EditTaskButton_Click" Tag="{Binding}" Width="60" />
 
-                                    <!-- Remove Button -->
-                                    <Button Content="Remove" Click="RemoveTaskButton_Click" Tag="{Binding}" Width="80" Margin="10,0,0,0"/>
+                                    <!-- Delete Button -->
+                                    <Button Content="Delete" Click="DeleteTaskButton_Click" Tag="{Binding}" Width="60" Margin="10,0,0,0"/>
                                 </StackPanel>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>

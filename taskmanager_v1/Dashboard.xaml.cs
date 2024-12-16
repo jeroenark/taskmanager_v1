@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
@@ -11,6 +12,7 @@ namespace taskmanager_v1
     public partial class Dashboard : Window
     {
         private string AccessToken;
+        private List<TaskItem> allTasks;  // Store all tasks for filtering and sorting
 
         public Dashboard(string accessToken)
         {
@@ -25,14 +27,10 @@ namespace taskmanager_v1
             try
             {
                 // Fetch tasks from the API
-                List<TaskItem> tasks = await GetTasksAsync();
+                allTasks = await GetTasksAsync();  // Fetch tasks and store them locally
 
-                // Clear and populate the task list UI
-                TasksListView.Items.Clear();
-                foreach (var task in tasks)
-                {
-                    TasksListView.Items.Add(task);
-                }
+                // Apply filters and sorting to the tasks (initially no filter, no sorting)
+                ApplyFiltersAndSorting();
             }
             catch (Exception ex)
             {
@@ -40,11 +38,7 @@ namespace taskmanager_v1
             }
         }
 
-        // Refresh button click handler
-        private async void RefreshTasksButton_Click(object sender, RoutedEventArgs e)
-        {
-            await LoadTasksAsync(); // Reload tasks when refresh is clicked
-        }
+        
 
         // Create Task button click handler
         private void CreateTaskButton_Click(object sender, RoutedEventArgs e)
@@ -85,52 +79,41 @@ namespace taskmanager_v1
             }
         }
 
-        // Remove Task button click handler
-        private async void RemoveTaskButton_Click(object sender, RoutedEventArgs e)
+        // Delete Task button click handler
+        private async void DeleteTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button button && button.Tag is TaskItem task)
+            // Ensure a task is selected
+            if (TasksListView.SelectedItem is TaskItem selectedTask)
             {
-                MessageBoxResult result = MessageBox.Show(
-                    $"Are you sure you want to delete the task '{task.Title}'?",
-                    "Confirm Delete",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning
-                );
-
-                if (result == MessageBoxResult.Yes)
+                try
                 {
-                    try
+                    bool confirmDelete = MessageBox.Show($"Are you sure you want to delete the task: {selectedTask.Title}?",
+                        "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+
+                    if (confirmDelete)
                     {
-                        using (HttpClient client = new HttpClient())
+                        // Call API to delete the task
+                        bool deleted = await DeleteTaskAsync(selectedTask.Id);
+                        if (deleted)
                         {
-                            // Set the API endpoint
-                            string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{task.Id}";
-
-                            // Add the authorization header
-                            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
-
-                            // Send the DELETE request
-                            HttpResponseMessage response = await client.DeleteAsync(apiUrl);
-
-                            if (response.IsSuccessStatusCode)
-                            {
-                                MessageBox.Show("Task deleted successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                                // Reload tasks after deletion
-                                await LoadTasksAsync();
-                            }
-                            else
-                            {
-                                string error = await response.Content.ReadAsStringAsync();
-                                MessageBox.Show($"Error deleting task: {response.StatusCode} - {error}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                            }
+                            MessageBox.Show("Task deleted successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                            // Reload tasks after deleting
+                            await LoadTasksAsync();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Failed to delete task.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"An error occurred: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
                 }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting task: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            else
+            {
+                MessageBox.Show("Please select a task to delete.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -160,5 +143,84 @@ namespace taskmanager_v1
                 return responseObject?.Data?.Tasks ?? new List<TaskItem>();
             }
         }
+
+        // Delete task from API
+        private async Task<bool> DeleteTaskAsync(int taskId)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{taskId}";
+
+                // Add Authorization header
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                // Send DELETE request
+                HttpResponseMessage response = await client.DeleteAsync(apiUrl);
+
+                return response.IsSuccessStatusCode;
+            }
+        }
+
+        // Apply filters and sorting
+        private void ApplyFiltersAndSorting()
+        {
+            try
+            {
+                // Start with all tasks
+                var tasks = allTasks.ToList();
+
+                // Apply completion filter
+                if (CompletionStatusComboBox.SelectedItem is ComboBoxItem selectedCompletionItem)
+                {
+                    string completionStatus = selectedCompletionItem.Content.ToString();
+                    if (completionStatus == "Completed")
+                    {
+                        tasks = tasks.Where(t => t.Completed == "Y").ToList();
+                    }
+                    else if (completionStatus == "Not Completed")
+                    {
+                        tasks = tasks.Where(t => t.Completed == "N").ToList();
+                    }
+                }
+
+                // Apply sorting based on deadline
+                if (SortDateComboBox.SelectedItem is ComboBoxItem selectedSortItem)
+                {
+                    string sortOrder = selectedSortItem.Content.ToString();
+                    if (sortOrder == "Sort by Date (Asc)")
+                    {
+                        tasks = tasks.OrderBy(t => DateTime.Parse(t.Deadline)).ToList();
+                    }
+                    else if (sortOrder == "Sort by Date (Desc)")
+                    {
+                        tasks = tasks.OrderByDescending(t => DateTime.Parse(t.Deadline)).ToList();
+                    }
+                }
+
+                // Update ListView
+                TasksListView.Items.Clear();
+                foreach (var task in tasks)
+                {
+                    TasksListView.Items.Add(task);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying filters and sorting: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+
+        // Completion filter change event
+        private void CompletionStatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyFiltersAndSorting();
+        }
+
+        private void SortDateComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyFiltersAndSorting();
+        }
+
     }
 }

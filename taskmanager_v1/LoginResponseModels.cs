@@ -57,8 +57,20 @@ namespace taskmanager_v1
         [JsonProperty("description")]
         public string Description { get; set; }
 
+        private string _deadline;
         [JsonProperty("deadline")]
-        public string Deadline { get; set; }
+        public string Deadline
+        {
+            get => _deadline;
+            set
+            {
+                _deadline = value;
+                // Convert string deadline to DateTime for sorting
+                DeadlineDate = DateTime.TryParse(value, out DateTime result) ? result : (DateTime?)null;
+            }
+        }
+
+        public DateTime? DeadlineDate { get; private set; } // For sorting and filtering by DateTime
 
         [JsonProperty("completed")]
         public string Completed { get; set; }
