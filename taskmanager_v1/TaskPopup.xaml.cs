@@ -63,7 +63,6 @@ namespace taskmanager_v1
                 var result = await CreateTaskAsync(title, description, deadline, completed);
                 if (result)
                 {
-                    MessageBox.Show("Task created successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     this.Close();
                 }
                 else
