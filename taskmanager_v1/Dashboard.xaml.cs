@@ -12,7 +12,10 @@ namespace taskmanager_v1
     public partial class Dashboard : Window
     {
         private string AccessToken;
-        private List<TaskItem> allTasks;  // Store all tasks for filtering and sorting
+        private List<TaskItem> allTasks;
+        private int currentPage = 1;
+        private int itemsPerPage = 5;
+        private int totalPages = 1;
 
         public Dashboard(string accessToken)
         {
@@ -38,7 +41,19 @@ namespace taskmanager_v1
             }
         }
 
-        
+        private void UpdatePaginationControls(int totalItems)
+        {
+            // Calculate total pages based on total filtered items
+            totalPages = (int)Math.Ceiling(totalItems / (double)itemsPerPage);
+            if (totalPages == 0) totalPages = 1;
+
+            // Update page info text
+            PageInfoText.Text = $"Page {currentPage} of {totalPages}";
+
+            // Enable/disable navigation buttons
+            PreviousButton.IsEnabled = currentPage > 1;
+            NextButton.IsEnabled = currentPage < totalPages;
+        }
 
         // Create Task button click handler
         private void CreateTaskButton_Click(object sender, RoutedEventArgs e)
@@ -197,12 +212,24 @@ namespace taskmanager_v1
                     }
                 }
 
+                // Get total count before pagination
+                int totalFilteredTasks = tasks.Count;
+
+                // Apply pagination
+                var pagedTasks = tasks
+                    .Skip((currentPage - 1) * itemsPerPage)
+                    .Take(itemsPerPage)
+                    .ToList();
+
                 // Update ListView
                 TasksListView.Items.Clear();
-                foreach (var task in tasks)
+                foreach (var task in pagedTasks)
                 {
                     TasksListView.Items.Add(task);
                 }
+
+                // Update pagination controls with total filtered items
+                UpdatePaginationControls(totalFilteredTasks);
             }
             catch (Exception ex)
             {
@@ -210,19 +237,36 @@ namespace taskmanager_v1
             }
         }
 
+        private void PreviousButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentPage > 1)
+            {
+                currentPage--;
+                ApplyFiltersAndSorting();
+            }
+        }
+
+        private void NextButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentPage < totalPages)
+            {
+                currentPage++;
+                ApplyFiltersAndSorting();
+            }
+        }
 
         // Completion filter change event
         private void CompletionStatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            currentPage = 1;  // Reset to first page when filter changes
             ApplyFiltersAndSorting();
         }
 
+        // Sort order change event
         private void SortDateComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            currentPage = 1;  // Reset to first page when sort changes
             ApplyFiltersAndSorting();
         }
-
-
-
     }
 }
