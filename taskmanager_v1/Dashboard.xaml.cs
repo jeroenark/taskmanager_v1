@@ -48,7 +48,7 @@ namespace taskmanager_v1
             if (totalPages == 0) totalPages = 1;
 
             // Update page info text
-            PageInfoText.Text = $"Page {currentPage} of {totalPages}";
+            PageInfoText.Text = $"Page {currentPage} of {totalPages}";                                                                                                          
 
             // Enable/disable navigation buttons
             PreviousButton.IsEnabled = currentPage > 1;
