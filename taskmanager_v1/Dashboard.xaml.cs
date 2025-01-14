@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Newtonsoft.Json;
+using System.IO;
 
 namespace taskmanager_v1
 {
@@ -21,67 +22,111 @@ namespace taskmanager_v1
         {
             InitializeComponent();
             AccessToken = accessToken;
+            allTasks = new List<TaskItem>();
             _ = LoadTasksAsync(); // Fire and forget: tasks load on initialization
         }
 
-        // Load tasks from API
-        private async Task LoadTasksAsync()
+        private List<TaskItem> LoadOfflineTasks()
+        {
+            List<TaskItem> offlineTasks = new List<TaskItem>();
+            
+            // Load both pending and completed tasks
+            string[] files = { "pending_tasks.json", "completed_tasks.json" };
+            foreach (string file in files)
+            {
+                if (File.Exists(file))
+                {
+                    try
+                    {
+                        string json = File.ReadAllText(file);
+                        var tasks = JsonConvert.DeserializeObject<List<TaskItem>>(json);
+                        if (tasks != null)
+                        {
+                            offlineTasks.AddRange(tasks);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error loading offline tasks: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+            return offlineTasks;
+        }
+
+        public async Task LoadTasksAsync()
         {
             try
             {
-                // Fetch tasks from the API
-                allTasks = await GetTasksAsync();  // Fetch tasks and store them locally
+                // Initialize with offline tasks
+                allTasks = LoadOfflineTasks();
 
-                // Apply filters and sorting to the tasks (initially no filter, no sorting)
+                try
+                {
+                    // Attempt to fetch online tasks
+                    var onlineTasks = await GetTasksAsync();
+                    if (onlineTasks != null)
+                    {
+                        // Merge online tasks with offline tasks, avoiding duplicates
+                        foreach (var task in onlineTasks)
+                        {
+                            if (!allTasks.Any(t => t.Id == task.Id))
+                            {
+                                allTasks.Add(task);
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // If online fetch fails, we'll just use offline tasks
+                    // Already loaded above, so no additional action needed
+                }
+
+                // Apply filters and sorting to all tasks
                 ApplyFiltersAndSorting();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to load tasks: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                if (allTasks == null)
+                {
+                    allTasks = new List<TaskItem>();
+                }
             }
         }
 
         private void UpdatePaginationControls(int totalItems)
         {
-            // Calculate total pages based on total filtered items
             totalPages = (int)Math.Ceiling(totalItems / (double)itemsPerPage);
             if (totalPages == 0) totalPages = 1;
 
-            // Update page info text
-            PageInfoText.Text = $"Page {currentPage} of {totalPages}";                                                                                                          
+            PageInfoText.Text = $"Page {currentPage} of {totalPages}";
 
-            // Enable/disable navigation buttons
             PreviousButton.IsEnabled = currentPage > 1;
             NextButton.IsEnabled = currentPage < totalPages;
         }
 
-        // Create Task button click handler
         private void CreateTaskButton_Click(object sender, RoutedEventArgs e)
         {
             TaskPopup taskPopup = new TaskPopup(AccessToken);
             taskPopup.Owner = this;
             taskPopup.ShowDialog();
-
-            // Reload tasks after closing the task creation popup
-            _ = LoadTasksAsync(); // Fire and forget
         }
 
         private void EditTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            // Ensure a task is selected
-            if (TasksListView.SelectedItem is TaskItem selectedTask)
+            if (sender is Button button && button.DataContext is TaskItem selectedTask)
             {
-                // Open the TaskEditPopup with all required parameters
                 TaskEditPopup editPopup = new TaskEditPopup(
                     AccessToken,
                     selectedTask.Id,
                     selectedTask.Title,
                     selectedTask.Description,
                     selectedTask.Deadline,
-                    selectedTask.Completed == "Y" // Convert "Y"/"N" to a boolean
+                    selectedTask.Completed == "Y"
                 );
 
-                // Set the popup's owner to the current window
                 editPopup.Owner = this;
                 editPopup.ShowDialog();
 
@@ -94,25 +139,24 @@ namespace taskmanager_v1
             }
         }
 
-        // Delete Task button click handler
         private async void DeleteTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            // Ensure a task is selected
-            if (TasksListView.SelectedItem is TaskItem selectedTask)
+            if (sender is Button button && button.DataContext is TaskItem selectedTask)
             {
                 try
                 {
-                    bool confirmDelete = MessageBox.Show($"Are you sure you want to delete the task: {selectedTask.Title}?",
-                        "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                    bool confirmDelete = MessageBox.Show(
+                        $"Are you sure you want to delete the task: {selectedTask.Title}?",
+                        "Confirm Delete",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning) == MessageBoxResult.Yes;
 
                     if (confirmDelete)
                     {
-                        // Call API to delete the task
                         bool deleted = await DeleteTaskAsync(selectedTask.Id);
                         if (deleted)
                         {
                             MessageBox.Show("Task deleted successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-                            // Reload tasks after deleting
                             await LoadTasksAsync();
                         }
                         else
@@ -132,17 +176,13 @@ namespace taskmanager_v1
             }
         }
 
-        // Fetch tasks from the API
         private async Task<List<TaskItem>> GetTasksAsync()
         {
             using (HttpClient client = new HttpClient())
             {
                 string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
-
-                // Add Authorization header
                 client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
 
-                // Send GET request
                 HttpResponseMessage response = await client.GetAsync(apiUrl);
                 string responseContent = await response.Content.ReadAsStringAsync();
 
@@ -151,41 +191,36 @@ namespace taskmanager_v1
                     throw new Exception($"API Error: {response.StatusCode} - {responseContent}");
                 }
 
-                // Deserialize the outer object to extract the tasks list
                 var responseObject = JsonConvert.DeserializeObject<ApiResponse>(responseContent);
-
-                // Return the tasks from the "tasks" property within "data"
                 return responseObject?.Data?.Tasks ?? new List<TaskItem>();
             }
         }
 
-        // Delete task from API
         private async Task<bool> DeleteTaskAsync(int taskId)
         {
             using (HttpClient client = new HttpClient())
             {
                 string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{taskId}";
-
-                // Add Authorization header
                 client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
-
-                // Send DELETE request
                 HttpResponseMessage response = await client.DeleteAsync(apiUrl);
-
                 return response.IsSuccessStatusCode;
             }
         }
 
-        // Apply filters and sorting
         private void ApplyFiltersAndSorting()
         {
             try
             {
-                // Start with all tasks
+                if (allTasks == null)
+                {
+                    allTasks = new List<TaskItem>();
+                    return;
+                }
+
                 var tasks = allTasks.ToList();
 
                 // Apply completion filter
-                if (CompletionStatusComboBox.SelectedItem is ComboBoxItem selectedCompletionItem)
+                if (CompletionStatusComboBox?.SelectedItem is ComboBoxItem selectedCompletionItem)
                 {
                     string completionStatus = selectedCompletionItem.Content.ToString();
                     if (completionStatus == "Completed")
@@ -198,42 +233,38 @@ namespace taskmanager_v1
                     }
                 }
 
-                // Apply sorting based on deadline
-                if (SortDateComboBox.SelectedItem is ComboBoxItem selectedSortItem)
+                // Apply sorting
+                if (SortDateComboBox?.SelectedItem is ComboBoxItem selectedSortItem)
                 {
                     string sortOrder = selectedSortItem.Content.ToString();
                     if (sortOrder == "Sort by Date (Asc)")
                     {
-                        tasks = tasks.OrderBy(t => DateTime.Parse(t.Deadline)).ToList();
+                        tasks = tasks.OrderBy(t => t.DeadlineDate).ToList();
                     }
                     else if (sortOrder == "Sort by Date (Desc)")
                     {
-                        tasks = tasks.OrderByDescending(t => DateTime.Parse(t.Deadline)).ToList();
+                        tasks = tasks.OrderByDescending(t => t.DeadlineDate).ToList();
                     }
                 }
 
-                // Get total count before pagination
                 int totalFilteredTasks = tasks.Count;
 
-                // Apply pagination
                 var pagedTasks = tasks
                     .Skip((currentPage - 1) * itemsPerPage)
                     .Take(itemsPerPage)
                     .ToList();
 
-                // Update ListView
                 TasksListView.Items.Clear();
                 foreach (var task in pagedTasks)
                 {
                     TasksListView.Items.Add(task);
                 }
 
-                // Update pagination controls with total filtered items
                 UpdatePaginationControls(totalFilteredTasks);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error applying filters and sorting: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error applying filters: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -255,18 +286,22 @@ namespace taskmanager_v1
             }
         }
 
-        // Completion filter change event
         private void CompletionStatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            currentPage = 1;  // Reset to first page when filter changes
-            ApplyFiltersAndSorting();
+            if (allTasks != null)  // Only apply if tasks are loaded
+            {
+                currentPage = 1;  // Reset to first page when filter changes
+                ApplyFiltersAndSorting();
+            }
         }
 
-        // Sort order change event
         private void SortDateComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            currentPage = 1;  // Reset to first page when sort changes
-            ApplyFiltersAndSorting();
+            if (allTasks != null)  // Only apply if tasks are loaded
+            {
+                currentPage = 1;  // Reset to first page when sort changes
+                ApplyFiltersAndSorting();
+            }
         }
     }
 }
