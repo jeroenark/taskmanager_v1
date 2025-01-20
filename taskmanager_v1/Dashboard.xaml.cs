@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Newtonsoft.Json;
 using System.IO;
+using System.Text;
 
 namespace taskmanager_v1
 {
@@ -29,7 +30,7 @@ namespace taskmanager_v1
         private List<TaskItem> LoadOfflineTasks()
         {
             List<TaskItem> offlineTasks = new List<TaskItem>();
-            
+
             // Load both pending and completed tasks
             string[] files = { "pending_tasks.json", "completed_tasks.json" };
             foreach (string file in files)
@@ -112,6 +113,91 @@ namespace taskmanager_v1
             TaskPopup taskPopup = new TaskPopup(AccessToken);
             taskPopup.Owner = this;
             taskPopup.ShowDialog();
+            _ = LoadTasksAsync(); // Refresh tasks after creating new one
+        }
+
+        private async void CompleteTaskButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is TaskItem selectedTask)
+            {
+                try
+                {
+                    if (selectedTask.Completed == "N")
+                    {
+                        Console.WriteLine($"Starting task completion...");
+                        Console.WriteLine($"Task details: ID={selectedTask.Id}, Title={selectedTask.Title}, Current Status={selectedTask.Completed}");
+
+                        bool result = await UpdateTaskCompletionAsync(selectedTask.Id, "Y");
+                        if (result)
+                        {
+                            selectedTask.Completed = "Y";
+                            TasksListView.Items.Refresh();
+                            await LoadTasksAsync();
+                        }
+                        else
+                        {
+                            MessageBox.Show($"Failed to update task.\n" +
+                                          $"Task ID: {selectedTask.Id}\n" +
+                                          $"Title: {selectedTask.Title}\n" +
+                                          "Please check the console output for more details.",
+                                          "Update Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error updating task:\n{ex.Message}\n\nPlease check the console output for more details.",
+                                  "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private async Task<bool> UpdateTaskCompletionAsync(int taskId, string completed)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                try
+                {
+                    string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{taskId}";
+
+                    // Add proper Content-Type header
+                    client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                    // Convert the "Y"/"N" to boolean
+                    bool isCompleted = completed == "Y";
+
+                    // Only send the completed field
+                    var taskUpdate = new
+                    {
+                        completed = isCompleted
+                    };
+
+                    string jsonPayload = JsonConvert.SerializeObject(taskUpdate);
+                    Console.WriteLine($"Sending request to: {apiUrl}");
+                    Console.WriteLine($"With payload: {jsonPayload}");
+
+                    var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                    var request = new HttpRequestMessage(HttpMethod.Patch, apiUrl)
+                    {
+                        Content = content
+                    };
+
+                    HttpResponseMessage response = await client.SendAsync(request);
+                    string responseContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Response Status: {response.StatusCode}");
+                    Console.WriteLine($"Response Content: {responseContent}");
+
+                    return response.StatusCode == System.Net.HttpStatusCode.Created;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Exception in UpdateTaskCompletionAsync: {ex.Message}");
+                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                    throw;
+                }
+            }
         }
 
         private void EditTaskButton_Click(object sender, RoutedEventArgs e)
@@ -129,9 +215,7 @@ namespace taskmanager_v1
 
                 editPopup.Owner = this;
                 editPopup.ShowDialog();
-
-                // Refresh the tasks after editing
-                _ = LoadTasksAsync();
+                _ = LoadTasksAsync(); // Refresh tasks after editing
             }
             else
             {

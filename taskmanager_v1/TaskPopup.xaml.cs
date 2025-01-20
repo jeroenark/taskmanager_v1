@@ -107,6 +107,40 @@ namespace taskmanager_v1
             connectionStatusText.Text = isConnected ? "Online" : "Offline";
         }
 
+        private async Task<TaskItem> CreateTaskWithServerResponse(string title, string description, string deadline, string completed)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                var payload = new
+                {
+                    title = title,
+                    description = description,
+                    deadline = deadline,
+                    completed = completed
+                };
+
+                string jsonPayload = JsonConvert.SerializeObject(payload);
+                StringContent content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                HttpResponseMessage response = await client.PostAsync(apiUrl, content);
+                string responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Response Content: {responseContent}");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new Exception($"API Error: {response.StatusCode} - {responseContent}");
+                }
+
+                // Parse the server response to get the actual task ID
+                var serverTask = JsonConvert.DeserializeObject<TaskItem>(responseContent);
+                return serverTask;
+            }
+        }
+
         private async void SubmitTaskButton_Click(object sender, RoutedEventArgs e)
         {
             string title = TitleTextBox.Text;
@@ -136,33 +170,27 @@ namespace taskmanager_v1
                 return;
             }
 
-            var task = new TaskItem
-            {
-                Title = title,
-                Description = description,
-                Deadline = deadline,
-                Completed = completed,
-                Id = new Random().Next(100000, 999999) // Temporary ID for local storage
-            };
-
             try
             {
                 if (CheckInternetConnection())
                 {
-                    var result = await CreateTaskAsync(title, description, deadline, completed);
-                    if (result)
-                    {
-                        SaveCompletedTask(task);
-                        this.Close();
-                    }
-                    else
-                    {
-                        MessageBox.Show("Failed to create task.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+                    // When online, create task on server and get the server-assigned ID
+                    var serverTask = await CreateTaskWithServerResponse(title, description, deadline, completed);
+                    SaveCompletedTask(serverTask);
+                    this.Close();
                 }
                 else
                 {
-                    SavePendingTask(task);
+                    // Only use random ID when offline
+                    var offlineTask = new TaskItem
+                    {
+                        Title = title,
+                        Description = description,
+                        Deadline = deadline,
+                        Completed = completed,
+                        Id = new Random().Next(100000, 999999) // Temporary ID for offline mode only
+                    };
+                    SavePendingTask(offlineTask);
                     MessageBox.Show("Task saved locally. Will be synced when internet connection is restored.",
                         "Offline Mode", MessageBoxButton.OK, MessageBoxImage.Information);
                     this.Close();
@@ -222,20 +250,13 @@ namespace taskmanager_v1
             {
                 try
                 {
-                    bool result = await CreateTaskAsync(
+                    var serverTask = await CreateTaskWithServerResponse(
                         task.Title,
                         task.Description,
                         task.Deadline,
                         task.Completed);
 
-                    if (result)
-                    {
-                        SaveCompletedTask(task);
-                    }
-                    else
-                    {
-                        failedTasks.Add(task);
-                    }
+                    SaveCompletedTask(serverTask); // Save with server-assigned ID
                 }
                 catch
                 {
@@ -245,38 +266,6 @@ namespace taskmanager_v1
 
             // Update pending tasks file with only failed tasks
             SaveTasks(failedTasks, PENDING_TASKS_FILE);
-        }
-
-        private async Task<bool> CreateTaskAsync(string title, string description, string deadline, string completed)
-        {
-            using (HttpClient client = new HttpClient())
-            {
-                string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
-
-                var payload = new
-                {
-                    title = title,
-                    description = description,
-                    deadline = deadline,
-                    completed = completed
-                };
-
-                string jsonPayload = JsonConvert.SerializeObject(payload);
-                StringContent content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-
-                HttpResponseMessage response = await client.PostAsync(apiUrl, content);
-                string responseContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Response Content: {responseContent}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"API Error: {response.StatusCode} - {responseContent}");
-                }
-
-                return true;
-            }
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
