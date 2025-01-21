@@ -19,8 +19,6 @@ namespace taskmanager_v1
             AccessToken = accessToken;
             TaskId = taskId;
 
-            MessageBox.Show($"Task ID: {TaskId}");
-
             // Pre-fill the fields with existing data
             TitleTextBox.Text = title;
             DescriptionTextBox.Text = description;

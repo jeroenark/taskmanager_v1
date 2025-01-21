@@ -116,42 +116,6 @@ namespace taskmanager_v1
             _ = LoadTasksAsync(); // Refresh tasks after creating new one
         }
 
-        private async void CompleteTaskButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.DataContext is TaskItem selectedTask)
-            {
-                try
-                {
-                    if (selectedTask.Completed == "N")
-                    {
-                        Console.WriteLine($"Starting task completion...");
-                        Console.WriteLine($"Task details: ID={selectedTask.Id}, Title={selectedTask.Title}, Current Status={selectedTask.Completed}");
-
-                        bool result = await UpdateTaskCompletionAsync(selectedTask.Id, "Y");
-                        if (result)
-                        {
-                            selectedTask.Completed = "Y";
-                            TasksListView.Items.Refresh();
-                            await LoadTasksAsync();
-                        }
-                        else
-                        {
-                            MessageBox.Show($"Failed to update task.\n" +
-                                          $"Task ID: {selectedTask.Id}\n" +
-                                          $"Title: {selectedTask.Title}\n" +
-                                          "Please check the console output for more details.",
-                                          "Update Failed", MessageBoxButton.OK, MessageBoxImage.Error);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error updating task:\n{ex.Message}\n\nPlease check the console output for more details.",
-                                  "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
         private async Task<bool> UpdateTaskCompletionAsync(int taskId, string completed)
         {
             using (HttpClient client = new HttpClient())

@@ -21,7 +21,6 @@ namespace taskmanager_v1
         private Ellipse connectionStatusIndicator;
         private TextBlock connectionStatusText;
         private const string PENDING_TASKS_FILE = "pending_tasks.json";
-        private const string COMPLETED_TASKS_FILE = "completed_tasks.json";
 
         public TaskPopup(string accessToken)
         {
@@ -107,40 +106,6 @@ namespace taskmanager_v1
             connectionStatusText.Text = isConnected ? "Online" : "Offline";
         }
 
-        private async Task<TaskItem> CreateTaskWithServerResponse(string title, string description, string deadline, string completed)
-        {
-            using (HttpClient client = new HttpClient())
-            {
-                string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
-
-                var payload = new
-                {
-                    title = title,
-                    description = description,
-                    deadline = deadline,
-                    completed = completed
-                };
-
-                string jsonPayload = JsonConvert.SerializeObject(payload);
-                StringContent content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-
-                HttpResponseMessage response = await client.PostAsync(apiUrl, content);
-                string responseContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Response Content: {responseContent}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"API Error: {response.StatusCode} - {responseContent}");
-                }
-
-                // Parse the server response to get the actual task ID
-                var serverTask = JsonConvert.DeserializeObject<TaskItem>(responseContent);
-                return serverTask;
-            }
-        }
-
         private async void SubmitTaskButton_Click(object sender, RoutedEventArgs e)
         {
             string title = TitleTextBox.Text;
@@ -174,22 +139,53 @@ namespace taskmanager_v1
             {
                 if (CheckInternetConnection())
                 {
-                    // When online, create task on server and get the server-assigned ID
-                    var serverTask = await CreateTaskWithServerResponse(title, description, deadline, completed);
-                    SaveCompletedTask(serverTask);
-                    this.Close();
+                    // When online, send directly to API
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
+                        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                        var payload = new
+                        {
+                            title = title,
+                            description = description,
+                            deadline = deadline ?? "",
+                            completed = completed
+                        };
+
+                        string jsonPayload = JsonConvert.SerializeObject(payload);
+                        var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+                        // Explicitly set Content-Type header
+                        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                        Console.WriteLine($"Sending online request with payload: {jsonPayload}");
+                        HttpResponseMessage response = await client.PostAsync(apiUrl, content);
+                        string responseContent = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"Server response: {responseContent}");
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            this.Close();
+                        }
+                        else
+                        {
+                            MessageBox.Show($"Failed to create task: {responseContent}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
                 }
                 else
                 {
-                    // Only use random ID when offline
+                    // Save task locally when offline
                     var offlineTask = new TaskItem
                     {
                         Title = title,
                         Description = description,
                         Deadline = deadline,
                         Completed = completed,
-                        Id = new Random().Next(100000, 999999) // Temporary ID for offline mode only
+                        Id = new Random().Next(100000, 999999) // Temporary ID for offline mode
                     };
+
                     SavePendingTask(offlineTask);
                     MessageBox.Show("Task saved locally. Will be synced when internet connection is restored.",
                         "Offline Mode", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -207,13 +203,6 @@ namespace taskmanager_v1
             var tasks = LoadTasks(PENDING_TASKS_FILE);
             tasks.Add(task);
             SaveTasks(tasks, PENDING_TASKS_FILE);
-        }
-
-        private void SaveCompletedTask(TaskItem task)
-        {
-            var tasks = LoadTasks(COMPLETED_TASKS_FILE);
-            tasks.Add(task);
-            SaveTasks(tasks, COMPLETED_TASKS_FILE);
         }
 
         private List<TaskItem> LoadTasks(string filename)
@@ -241,31 +230,82 @@ namespace taskmanager_v1
 
         private async Task SyncPendingTasks()
         {
-            var pendingTasks = LoadTasks(PENDING_TASKS_FILE);
-            if (pendingTasks.Count == 0) return;
-
-            List<TaskItem> failedTasks = new List<TaskItem>();
-
-            foreach (var task in pendingTasks)
+            try
             {
-                try
-                {
-                    var serverTask = await CreateTaskWithServerResponse(
-                        task.Title,
-                        task.Description,
-                        task.Deadline,
-                        task.Completed);
+                // Load pending tasks
+                var pendingTasks = LoadTasks(PENDING_TASKS_FILE);
+                if (pendingTasks.Count == 0) return;
 
-                    SaveCompletedTask(serverTask); // Save with server-assigned ID
-                }
-                catch
+                Console.WriteLine($"Found {pendingTasks.Count} pending tasks to sync");
+                List<TaskItem> failedTasks = new List<TaskItem>();
+
+                foreach (var task in pendingTasks)
                 {
-                    failedTasks.Add(task);
+                    try
+                    {
+                        // Create POST request for each task
+                        using (HttpClient client = new HttpClient())
+                        {
+                            string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                            var payload = new
+                            {
+                                title = task.Title,
+                                description = task.Description,
+                                deadline = task.Deadline ?? "",  // Ensure deadline is not null
+                                completed = task.Completed
+                            };
+
+                            string jsonPayload = JsonConvert.SerializeObject(payload);
+                            Console.WriteLine($"Sending task to API: {jsonPayload}");
+
+                            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                            HttpResponseMessage response = await client.PostAsync(apiUrl, content);
+                            string responseContent = await response.Content.ReadAsStringAsync();
+                            Console.WriteLine($"API Response: {responseContent}");
+
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                Console.WriteLine($"Failed to sync task: {task.Title}. Status: {response.StatusCode}");
+                                failedTasks.Add(task);
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Successfully synced task: {task.Title}");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error syncing task {task.Title}: {ex.Message}");
+                        failedTasks.Add(task);
+                    }
+                }
+
+                // Update pending tasks file - only keep failed ones
+                if (failedTasks.Count > 0)
+                {
+                    SaveTasks(failedTasks, PENDING_TASKS_FILE);
+                    Console.WriteLine($"{failedTasks.Count} tasks failed to sync and remain in pending tasks");
+                }
+                else
+                {
+                    // Clear pending tasks file if all synced successfully
+                    File.WriteAllText(PENDING_TASKS_FILE, "[]");
+                    Console.WriteLine("All tasks synced successfully. Cleared pending tasks file.");
+                    MessageBox.Show("All pending tasks have been successfully uploaded to the server.",
+                                  "Sync Complete", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
-
-            // Update pending tasks file with only failed tasks
-            SaveTasks(failedTasks, PENDING_TASKS_FILE);
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in SyncPendingTasks: {ex.Message}");
+                MessageBox.Show($"Error syncing tasks: {ex.Message}",
+                              "Sync Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

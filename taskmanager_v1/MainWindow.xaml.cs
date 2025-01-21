@@ -31,7 +31,6 @@ namespace taskmanager_v1
                 var result = await LoginAsync(username, password);
                 if (result.Success)
                 {
-                    MessageBox.Show("Login successful!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     // Handle navigation or further actions
                     // Open the Dashboard and pass the access token
                     Dashboard dashboard = new Dashboard(result.Data.AccessToken);

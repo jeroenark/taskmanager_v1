@@ -94,30 +94,13 @@
                                         </TextBlock>
 
                                         <!-- Action Buttons -->
-                                        <!-- Action Buttons -->
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
-                                            <Button Content="Complete" Click="CompleteTaskButton_Click"
-            Background="#4CAF50" Foreground="White"
-            Height="35" Width="95" Margin="0,0,5,0">
-                                                <Button.Style>
-                                                    <Style TargetType="Button">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Completed}" Value="Y">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Completed}" Value="N">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
                                             <Button Content="Edit" Click="EditTaskButton_Click"
-            Background="#FFC107" Foreground="White"
-            Height="35" Width="95" Margin="0,0,5,0"/>
+                                                    Background="#FFC107" Foreground="White"
+                                                    Height="35" Width="145" Margin="0,0,5,0"/>
                                             <Button Content="Delete" Click="DeleteTaskButton_Click"
-            Background="#F44336" Foreground="White"
-            Height="35" Width="95"/>
+                                                    Background="#F44336" Foreground="White"
+                                                    Height="35" Width="145"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
