@@ -18,6 +18,7 @@ namespace taskmanager_v1
 
         [JsonProperty("data")]
         public LoginData Data { get; set; }
+
     }
 
     public class LoginData
@@ -33,6 +34,9 @@ namespace taskmanager_v1
 
         [JsonProperty("refresh_token")]
         public string RefreshToken { get; set; }
+
+        [JsonProperty("refresh_token_expiry")]
+        public int RefreshTokenExpiry { get; set; }
     }
 
     // Register Response Class

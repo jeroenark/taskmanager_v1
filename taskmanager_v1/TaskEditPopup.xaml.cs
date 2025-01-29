@@ -45,7 +45,7 @@ namespace taskmanager_v1
                 using (HttpClient client = new HttpClient())
                 {
                     // Set the API endpoint
-                    string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{TaskId}";
+                    string apiUrl = $"https://pmarcelis.mid-ica.nl/v1/tasks/{TaskId}";
 
                     // Add the authorization header
                     client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
@@ -85,7 +85,7 @@ namespace taskmanager_v1
             {
                 using (HttpClient client = new HttpClient())
                 {
-                    string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{taskId}";
+                    string apiUrl = $"https://pmarcelis.mid-ica.nl/v1/tasks/{taskId}";
 
                     // Set the Authorization header
                     client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);

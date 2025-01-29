@@ -49,7 +49,7 @@ namespace taskmanager_v1
         {
             using (HttpClient client = new HttpClient())
             {
-                string apiUrl = "https://myriad-manifestation.nl/v1/users";
+                string apiUrl = "https://pmarcelis.mid-ica.nl/v1/users";
 
                 var payload = new
                 {

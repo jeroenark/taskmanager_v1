@@ -33,7 +33,7 @@ namespace taskmanager_v1
                 {
                     // Handle navigation or further actions
                     // Open the Dashboard and pass the access token
-                    Dashboard dashboard = new Dashboard(result.Data.AccessToken);
+                    Dashboard dashboard = new Dashboard(result.Data);
                     dashboard.Show();
 
                     // Close the login window
@@ -54,7 +54,7 @@ namespace taskmanager_v1
         {
             using (HttpClient client = new HttpClient())
             {
-                string apiUrl = "https://myriad-manifestation.nl/v1/sessions";
+                string apiUrl = "https://pmarcelis.mid-ica.nl/v1/sessions";
 
                 // Create the JSON payload
                 var payload = new

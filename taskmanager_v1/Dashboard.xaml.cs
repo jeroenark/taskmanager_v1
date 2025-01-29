@@ -13,18 +13,41 @@ namespace taskmanager_v1
 {
     public partial class Dashboard : Window
     {
+        private string SessionId;
         private string AccessToken;
+        private string refreshToken;
+        private DateTime accesTokenExpiry;
+        private DateTime refreshTokenExpiry;
         private List<TaskItem> allTasks;
         private int currentPage = 1;
         private int itemsPerPage = 5;
         private int totalPages = 1;
 
-        public Dashboard(string accessToken)
+        public Dashboard(LoginData data)
         {
             InitializeComponent();
-            AccessToken = accessToken;
+            Initialize(data);
+
             allTasks = new List<TaskItem>();
             _ = LoadTasksAsync(); // Fire and forget: tasks load on initialization
+        }
+
+        public void Initialize(LoginData data)
+        {
+            SessionId = data.SessionId;
+            AccessToken = data.AccessToken;
+            refreshToken = data.RefreshToken;
+            //accesTokenExpiry = DateTime.Now.AddSeconds(data.AccessTokenExpiry);
+            accesTokenExpiry = DateTime.Now.AddSeconds(20);
+            refreshTokenExpiry = DateTime.Now.AddSeconds(data.RefreshTokenExpiry);
+
+            // Debug logging
+            MessageBox.Show($"Initialized session: ID={SessionId}, Token expires in {data.AccessTokenExpiry}s, and refresh token {data.RefreshTokenExpiry}s ");
+        }
+
+        public string GetAccessToken()
+        {
+            return AccessToken;
         }
 
         private List<TaskItem> LoadOfflineTasks()
@@ -108,12 +131,14 @@ namespace taskmanager_v1
             NextButton.IsEnabled = currentPage < totalPages;
         }
 
-        private void CreateTaskButton_Click(object sender, RoutedEventArgs e)
+        private async void CreateTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            TaskPopup taskPopup = new TaskPopup(AccessToken);
+            TaskPopup taskPopup = new TaskPopup(AccessToken, this);
             taskPopup.Owner = this;
-            taskPopup.ShowDialog();
-            _ = LoadTasksAsync(); // Refresh tasks after creating new one
+            if (taskPopup.ShowDialog() == true)  // Only refresh if dialog result is true
+            {
+                await LoadTasksAsync(); // Properly await the refresh
+            }
         }
 
         private async Task<bool> UpdateTaskCompletionAsync(int taskId, string completed)
@@ -122,18 +147,13 @@ namespace taskmanager_v1
             {
                 try
                 {
-                    string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{taskId}";
-
-                    // Add proper Content-Type header
+                    string apiUrl = $"https://pmarcelis.mid-ica.nl/v1/tasks/{taskId}";
                     client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
-
-                    // Convert the "Y"/"N" to boolean
-                    bool isCompleted = completed == "Y";
 
                     // Only send the completed field
                     var taskUpdate = new
                     {
-                        completed = isCompleted
+                        completed = completed  // Send "Y" or "N" directly
                     };
 
                     string jsonPayload = JsonConvert.SerializeObject(taskUpdate);
@@ -228,11 +248,13 @@ namespace taskmanager_v1
         {
             using (HttpClient client = new HttpClient())
             {
-                string apiUrl = "https://myriad-manifestation.nl/v1/tasks";
+                string apiUrl = "https://pmarcelis.mid-ica.nl/v1/tasks";
                 client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
 
                 HttpResponseMessage response = await client.GetAsync(apiUrl);
                 string responseContent = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine($"GET Tasks Response: {responseContent}");  // Log the response
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -248,7 +270,7 @@ namespace taskmanager_v1
         {
             using (HttpClient client = new HttpClient())
             {
-                string apiUrl = $"https://myriad-manifestation.nl/v1/tasks/{taskId}";
+                string apiUrl = $"https://pmarcelis.mid-ica.nl/v1/tasks/{taskId}";
                 client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
                 HttpResponseMessage response = await client.DeleteAsync(apiUrl);
                 return response.IsSuccessStatusCode;
@@ -349,6 +371,123 @@ namespace taskmanager_v1
             {
                 currentPage = 1;  // Reset to first page when sort changes
                 ApplyFiltersAndSorting();
+            }
+        }
+
+        public async Task<bool> RefreshSession()
+        {
+            try
+            {
+                if (DateTime.Now > accesTokenExpiry)
+                {
+                    if (DateTime.Now > refreshTokenExpiry)
+                    {
+                        await LogoutUser();
+                        return false;
+                    }
+                    else
+                    {
+                        using (HttpClient client = new HttpClient())
+                        {
+                            string refreshUrl = $"https://pmarcelis.mid-ica.nl/v1/sessions/{SessionId}";
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", AccessToken);
+
+                            var refreshRequest = new
+                            {
+                                refresh_token = refreshToken
+                            };
+
+                            string jsonPayload = JsonConvert.SerializeObject(refreshRequest);
+                            MessageBox.Show($"Refresh Request Payload: {jsonPayload}");
+
+                            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+                            // Explicitly set the Content-Type header on the content
+                            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                            HttpResponseMessage response = await client.PostAsync(refreshUrl, content);
+                            string responseContent = await response.Content.ReadAsStringAsync();
+                            MessageBox.Show($"Refresh Response: {responseContent}");
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var loginResponse = JsonConvert.DeserializeObject<LoginResponse>(responseContent);
+
+                                if (loginResponse?.Success == true && loginResponse.Data != null)
+                                {
+                                    Initialize(loginResponse.Data);
+                                    MessageBox.Show("Session refreshed successfully");
+                                    return true;
+                                }
+                            }
+
+                            MessageBox.Show($"Refresh failed: {response.StatusCode} - {responseContent}");
+                            await LogoutUser();
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Refresh session error: {ex.Message}");
+                await LogoutUser();
+                return false;
+            }
+        }
+        private async void ToggleCompleteButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is TaskItem selectedTask)
+            {
+                try
+                {
+                    // Toggle the completion status
+                    string newStatus = selectedTask.Completed == "Y" ? "N" : "Y";
+                    bool success = await UpdateTaskCompletionAsync(selectedTask.Id, newStatus);
+
+                    if (success)
+                    {
+                        await LoadTasksAsync(); // Refresh the task list
+                    }
+                    else
+                    {
+                        MessageBox.Show("Failed to update task completion status.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error updating task completion: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        public async Task LogoutUser()
+        {
+            try
+            {
+                // Clear tokens and session data
+                AccessToken = null;
+                refreshToken = null;
+                accesTokenExpiry = DateTime.MinValue;
+                refreshTokenExpiry = DateTime.MinValue;
+
+                // Clear any cached tasks
+                allTasks?.Clear();
+
+                // Create and show login window
+                var loginWindow = new MainWindow();
+                loginWindow.Show();
+
+                // Close current dashboard window
+                this.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Logout error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                // Force close the window even if there's an error
+                this.Close();
             }
         }
     }
