@@ -13,6 +13,11 @@
                          Foreground="#333333" HorizontalAlignment="Center" Margin="0,5,0,10"/>
 
                 <!-- Controls Panel at Top -->
+                <Button DockPanel.Dock="Top" Content="Logout" 
+        Background="#dc3545" Foreground="White" 
+        FontWeight="Bold" Height="35" Width="100"
+        HorizontalAlignment="Right" Margin="0,5,0,10"
+        Click="LogoutButton_Click"/>
                 <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>

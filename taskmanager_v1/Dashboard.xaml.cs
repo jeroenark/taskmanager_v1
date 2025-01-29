@@ -37,12 +37,19 @@ namespace taskmanager_v1
             SessionId = data.SessionId;
             AccessToken = data.AccessToken;
             refreshToken = data.RefreshToken;
-            //accesTokenExpiry = DateTime.Now.AddSeconds(data.AccessTokenExpiry);
-            accesTokenExpiry = DateTime.Now.AddSeconds(20);
+            accesTokenExpiry = DateTime.Now.AddSeconds(data.AccessTokenExpiry);
             refreshTokenExpiry = DateTime.Now.AddSeconds(data.RefreshTokenExpiry);
 
-            // Debug logging
-            MessageBox.Show($"Initialized session: ID={SessionId}, Token expires in {data.AccessTokenExpiry}s, and refresh token {data.RefreshTokenExpiry}s ");
+            // Save login data
+            LoginStorage.SaveLoginData(new StoredLoginData
+            {
+                SessionId = SessionId,
+                AccessToken = AccessToken,
+                RefreshToken = refreshToken,
+                AccessTokenExpiry = accesTokenExpiry,
+                RefreshTokenExpiry = refreshTokenExpiry
+            });
+
         }
 
         public string GetAccessToken()
@@ -462,11 +469,27 @@ namespace taskmanager_v1
                 }
             }
         }
+        private async void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (MessageBox.Show("Are you sure you want to logout?", "Confirm Logout",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                // For manual logout, we do want to delete the stored login data
+                LoginStorage.DeleteLoginData();
+                await LogoutUser();
+            }
+        }
 
         public async Task LogoutUser()
         {
             try
             {
+                // Only delete login data if refresh token is expired
+                if (DateTime.Now > refreshTokenExpiry)
+                {
+                    LoginStorage.DeleteLoginData();
+                }
+
                 // Clear tokens and session data
                 AccessToken = null;
                 refreshToken = null;
@@ -486,7 +509,6 @@ namespace taskmanager_v1
             catch (Exception ex)
             {
                 MessageBox.Show($"Logout error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                // Force close the window even if there's an error
                 this.Close();
             }
         }

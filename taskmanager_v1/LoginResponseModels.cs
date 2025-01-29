@@ -21,6 +21,15 @@ namespace taskmanager_v1
 
     }
 
+    public class StoredLoginData
+    {
+        public string SessionId { get; set; }
+        public string AccessToken { get; set; }
+        public string RefreshToken { get; set; }
+        public DateTime AccessTokenExpiry { get; set; }
+        public DateTime RefreshTokenExpiry { get; set; }
+    }
+
     public class LoginData
     {
         [JsonProperty("session_id")]
@@ -105,4 +114,6 @@ namespace taskmanager_v1
         [JsonProperty("tasks")]
         public List<TaskItem> Tasks { get; set; }
     }
+
+
 }

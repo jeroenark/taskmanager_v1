@@ -13,6 +13,26 @@ namespace taskmanager_v1
         public MainWindow()
         {
             InitializeComponent();
+
+            // Check for stored login data
+            var storedLogin = LoginStorage.LoadLoginData();
+            if (storedLogin != null)
+            {
+                // Create login data from stored data
+                var loginData = new LoginData
+                {
+                    SessionId = storedLogin.SessionId,
+                    AccessToken = storedLogin.AccessToken,
+                    RefreshToken = storedLogin.RefreshToken,
+                    AccessTokenExpiry = (int)(storedLogin.AccessTokenExpiry - DateTime.Now).TotalSeconds,
+                    RefreshTokenExpiry = (int)(storedLogin.RefreshTokenExpiry - DateTime.Now).TotalSeconds
+                };
+
+                // Open dashboard with stored login data
+                var dashboard = new Dashboard(loginData);
+                dashboard.Show();
+                this.Close();
+            }
         }
 
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
